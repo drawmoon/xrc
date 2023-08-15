@@ -1,0 +1,132 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.21.0
+          cache: true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Release for Windows
+        run: go build -ldflags "-s -w" -o xrc-windows-amd64.exe
+        env:
+          GOOS: windows
+          GOARCH: amd64
+      - uses: actions/upload-artifact@v3
+        with:
+          name: 'xrc-windows-amd64.exe'
+          path: 'xrc-windows-amd64.exe'
+
+      - name: Release for Darwin
+        run: go build -ldflags "-s -w" -o xrc-darwin-amd64
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+      - uses: actions/upload-artifact@v3
+        with:
+          name: 'xrc-darwin-amd64'
+          path: 'xrc-darwin-amd64'
+
+      - name: Release for Linux
+        run: go build -ldflags "-s -w" -o xrc-linux-amd64
+        env:
+          GOOS: linux
+          GOARCH: amd64
+      - uses: actions/upload-artifact@v3
+        with:
+          name: 'xrc-linux-amd64'
+          path: 'xrc-linux-amd64'
+
+  release_windows:
+    name: Release for Windows
+    runs-on: ubuntu-latest
+
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/download-artifact@v2
+        with:
+          name: xrc-windows-${{ matrix.arch }}.exe
+          path: xrc-windows
+      - run: |
+          cp README.md LICENSE xrc-windows/.
+          tar -czvf xrc-windows-${{ matrix.arch }}.tar.gz xrc-windows
+      - run: sha256sum xrc-windows-${{ matrix.arch }}.tar.gz > xrc-windows-${{ matrix.arch }}.tar.gz.sha256sum
+      - uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: xrc-windows-${{ matrix.arch }}.*
+          tag: ${{ github.ref }}
+          overwrite: false
+          file_glob: true
+
+  release_darwin:
+    name: Release for Darwin
+    runs-on: ubuntu-latest
+
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/download-artifact@v2
+        with:
+          name: xrc-darwin-${{ matrix.arch }}
+          path: xrc-darwin
+      - run: |
+          cp README.md LICENSE xrc-darwin/.
+          tar -czvf xrc-darwin-${{ matrix.arch }}.tar.gz xrc-darwin
+      - run: sha256sum xrc-darwin-${{ matrix.arch }}.tar.gz > xrc-darwin-${{ matrix.arch }}.tar.gz.sha256sum
+      - uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: xrc-darwin-${{ matrix.arch }}.*
+          tag: ${{ github.ref }}
+          overwrite: false
+          file_glob: true
+
+  release_linux:
+    name: Release for Linux
+    runs-on: ubuntu-latest
+
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/download-artifact@v2
+        with:
+          name: xrc-linux-${{ matrix.arch }}
+          path: xrc-linux
+      - run: |
+          cp README.md LICENSE xrc-linux/.
+          tar -czvf xrc-linux-${{ matrix.arch }}.tar.gz xrc-linux
+      - run: sha256sum xrc-linux-${{ matrix.arch }}.tar.gz > xrc-linux-${{ matrix.arch }}.tar.gz.sha256sum
+      - uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: xrc-linux-${{ matrix.arch }}.*
+          tag: ${{ github.ref }}
+          overwrite: false
+          file_glob: true
