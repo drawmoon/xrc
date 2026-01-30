@@ -25,3 +25,8 @@ bin
 
 # Macos file
 .DS_Store
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml

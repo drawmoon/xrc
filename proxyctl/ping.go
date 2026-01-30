@@ -1,117 +1,59 @@
 package proxyctl
 
-import (
-	"errors"
-	"main/settings"
-	"main/subscription"
-	"net/http"
-	"sort"
-	"time"
+// func ParallelMeasureDelay(links []*subscription.Link, threads int, times int, timeout uint64) []*subscription.Link {
+// 	if threads <= 0 {
+// 		threads = 1
+// 	}
+// 	slog.Debug("ping with %d threads", threads)
 
-	"github.com/sourcegraph/conc/pool"
+// 	threadPool := pool.New().WithMaxGoroutines(threads)
+// 	for _, link := range links {
+// 		link0 := link // capture range variable
 
-	log "github.com/sirupsen/logrus"
-)
+// 		threadPool.Go(func() {
+// 			port := PickFreeTcpPort()
+// 			delay, err := MeasureDelay(link0, port, times, timeout)
+// 			if err != nil {
+// 				log.Error(err)
+// 				delay = -1
+// 			}
 
-func ParallelMeasureDelay(lks []*subscription.Link, conc int, times int, timeout uint64) []*subscription.Link {
-	conc = func() int {
-		if conc <= 0 {
-			conc = 1
-		} else if len(lks) < conc {
-			conc = len(lks)
-		}
-		return conc
-	}()
-	log.Debugf("ping with %d threads", conc)
+// 			link0.Delay = delay
+// 		})
+// 	}
+// 	threadPool.Wait()
 
-	p := pool.New().WithMaxGoroutines(conc)
-	for _, lk := range lks {
-		lk := lk
+// 	var r []*subscription.Link
+// 	for _, lk := range links {
+// 		if lk.Delay > -1 {
+// 			r = append(r, lk)
+// 		}
+// 	}
 
-		p.Go(func() {
-			port := pickFreeTcpPort()
-			listen := &settings.Listen{
-				Protocol: "http",
-				Port:     port,
-			}
-			delay, err := MeasureDelay(lk, listen, times, timeout)
-			if err != nil {
-				log.Error(err)
-				delay = -1
-			}
+// 	if len(r) == 0 {
+// 		return r
+// 	}
+// 	return sortByDelay(r)
+// }
 
-			lk.Delay = delay
-		})
-	}
-	p.Wait()
+// func MeasureDelay(link *subscription.Link, port int, times int, timeout uint64) (int32, error) {
+// 	a, err := NewXray([]*subscription.Link{link}, []*settings.Listen{listen}, false, false, -1)
+// 	if err != nil {
+// 		return -1, err
+// 	}
 
-	var r []*subscription.Link
-	for _, lk := range lks {
-		if lk.Delay > -1 {
-			r = append(r, lk)
-		}
-	}
+// 	if err := a.Start(); err != nil {
+// 		return -1, err
+// 	}
+// 	defer a.Close()
 
-	if len(r) == 0 {
-		return r
-	}
-	return sortByDelay(r)
-}
+// 	client := a.NewHttpClient(timeout)
+// 	return ping(client, times, link.Remarks), nil
+// }
 
-func MeasureDelay(lk *subscription.Link, listen *settings.Listen, times int, timeout uint64) (int32, error) {
-	x, err := NewXray([]*subscription.Link{lk}, []*settings.Listen{listen}, false, false, -1)
-	if err != nil {
-		return -1, err
-	}
-
-	if err := x.Start(); err != nil {
-		return -1, err
-
-	}
-	defer x.Close()
-
-	c := x.NewHttpClient(timeout)
-	return ping(c, times, lk.Remarks), nil
-}
-
-func ping(c *http.Client, times int, remarks string) int32 {
-	req, _ := http.NewRequest("GET", "https://www.google.com/generate_204", nil)
-
-	total := 0
-	skip := false
-	for i := 0; i < times; i++ {
-		elapsedMillis, err := func() (int64, error) {
-			now := time.Now()
-			res, err := c.Do(req)
-			if err != nil {
-				return -1, errors.New("ping failed")
-			}
-			defer res.Body.Close()
-			elapsedMillis := time.Since(now).Milliseconds()
-			if res.StatusCode == 204 && res.ContentLength == 0 {
-				return elapsedMillis, nil
-			}
-			return -1, nil
-		}()
-		if err != nil || elapsedMillis == -1 {
-			skip = true
-			break
-		}
-		total += int(elapsedMillis)
-	}
-	if skip {
-		log.Debugf("ping '%s' timeout", remarks)
-		return -1
-	}
-	elapsedMillis := total / times
-	log.Debugf("ping '%s' average elapsed %dms", remarks, elapsedMillis)
-	return int32(elapsedMillis)
-}
-
-func sortByDelay(lks []*subscription.Link) []*subscription.Link {
-	sort.Slice(lks, func(a, b int) bool {
-		return lks[a].Delay < lks[b].Delay
-	})
-
-	return lks
-}
+// func sortByDelay(links []*subscription.Link) []*subscription.Link {
+// 	sort.Slice(links, func(a, b int) bool {
+// 		return links[a].Delay < links[b].Delay
+// 	})
+// 	return links
+// }
